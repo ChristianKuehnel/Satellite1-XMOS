@@ -32,7 +32,7 @@ source tools/env/xmos_env.sh
 cmake -B build --toolchain xmos_cmake_toolchain/xs3a.cmake
 cmake --build build --target create_flash_img_satellite1_firmware_fixed_delay -j$(nproc)
 
-# Unit tests (no hardware, no XMOS toolchain needed)
+# Unit tests (no hardware required)
 pip install -r requirements_tests.txt
 pytest tests/test_versioning/ tests/test_package_firmware_deb.py -v
 ```
