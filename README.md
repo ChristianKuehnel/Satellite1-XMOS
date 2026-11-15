@@ -74,6 +74,42 @@ xflash --quad-spi-clock 50MHz --factory variant_name.xe --boot-partition-size 0x
 ```
 
 
+## Development builds
+
+Every push to `develop` triggers the **Dev Build** workflow (`.github/workflows/dev-build.yml`), which builds the firmware in the official XCORE builder container and publishes it to GitHub Releases. No local toolchain is needed to obtain a build.
+
+Two kinds of development release are produced:
+
+- **`dev-latest`** – a rolling pre-release that always points at the most recent successful build. Its assets are replaced on each push.
+- **`dev-YYYYMMDD-<sha>`** – an immutable pre-release per push. Each push keeps a permanent, addressable artifact that is never overwritten.
+
+Each release contains:
+
+- `satellite1_firmware_fixed_delay.factory.bin` (+ `.sha256`) – full flash image
+- `satellite1_firmware_fixed_delay.upgrade.bin` (+ `.sha256`) – DFU upgrade image
+
+The exact commit embedded in each binary can be recovered from `git describe`:
+the build identifier is compiled into the image and reported by the DFU
+`GETVERSION` service.
+
+The workflow also maintains a machine-readable index served from the GitHub
+Pages branch:
+
+```
+https://raw.githubusercontent.com/FutureProofHomes/Satellite1-XMOS/gh-pages/releases.json
+```
+
+It lists the current `dev-latest` build plus the most recent pinned builds
+(commit, version, `git describe`, timestamp, and release URL).
+
+A **Dev Cleanup** workflow (`.github/workflows/dev-cleanup.yml`) runs monthly to
+delete pinned `dev-*` pre-releases older than 180 days. It never removes
+`dev-latest` or any real (non-pre-release) release.
+
+> **Note:** Development builds are unsigned, unreleased artifacts. Validate the
+> `.sha256` checksum before flashing, and prefer the stable releases for
+> production devices.
+
 ## Building the firmware locally
 
 ### Clone repository

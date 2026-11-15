@@ -146,6 +146,13 @@ control_ret_t dfu_servicer_read_cmd(control_resource_info_t *res_info, control_c
     {
         debug_printf("DFU_CONTROLLER_SERVICER_RESID_DFU_GETVERSION\n");
         static const uint8_t version[5] = {APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_PATCH, APP_VERSION_PRERELEASE, APP_VERSION_COUNTER};
+        /* Retain the embedded git-describe build identifier in the image so the
+         * exact commit can be recovered from a flashed device. Taking the address
+         * of the string guarantees it is emitted even when debug_printf is compiled
+         * out (DEBUG_PRINT_ENABLE=0). */
+        static const char version_git[] = APP_VERSION_GIT;
+        const char *version_git_ptr = &version_git[0];
+        (void)version_git_ptr;
         memcpy(payload, &version, sizeof(version));
         break;
     }
