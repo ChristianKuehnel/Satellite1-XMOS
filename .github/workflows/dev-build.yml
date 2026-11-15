@@ -116,7 +116,6 @@ jobs:
       DEV_BUILD_VERSION: ${{ needs.build.outputs.build_version }}
       DEV_BUILD_GIT_DESCRIBE: ${{ needs.build.outputs.build_describe }}
       DEV_BUILD_TAG: ${{ needs.build.outputs.build_tag }}
-      DEV_LATEST_TAG: ${{ env.DEV_LATEST_TAG }}
       DEV_BUILD_DATE: ${{ needs.build.outputs.build_date }}
       DEV_BUILD_BRANCH: ${{ needs.build.outputs.build_branch }}
       ASSETS_DIR: ${{ github.workspace }}/assets
