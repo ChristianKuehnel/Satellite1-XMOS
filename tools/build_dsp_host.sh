@@ -38,6 +38,15 @@ if [[ -n "${FLATBUFFERS_H}" && -f "${FLATBUFFERS_H}" ]]; then
     fi
 fi
 
+# Check if the target exists (removed in fwk_voice >= v0.9.0)
+if ! grep -rq "bare_metal_pipeline_single_thread\|pipeline_single_threaded" \
+     "${REPO_ROOT}/modules/voice/examples/" 2>/dev/null; then
+    echo "Note: Full-pipeline host example is not available in this fwk_voice version."
+    echo "The pipeline example was made xcore-only in fwk_voice v0.9.0."
+    echo "Use 'bash tools/build_array_host.sh' for host-based DSP tests."
+    exit 0
+fi
+
 echo "Configuring..."
 cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}/modules/voice" -DCMAKE_BUILD_TYPE=Release
 

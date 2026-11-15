@@ -36,10 +36,11 @@ def pipeline_binary(request):
     else:
         path = DEFAULT_BINARY
     if not path.exists():
-        pytest.fail(
+        pytest.skip(
             f"Pipeline binary not found at {path}.\n"
             f"Build it with: bash tools/build_dsp_host.sh\n"
-            f"Or pass --dsp-binary /path/to/binary"
+            f"Or pass --dsp-binary /path/to/binary\n"
+            f"Note: fwk_voice >= v0.9.0 no longer provides a host pipeline example."
         )
     return path
 
