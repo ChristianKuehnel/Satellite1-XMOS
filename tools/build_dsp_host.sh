@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${REPO_ROOT}/build-host"
-TARGET="fwk_voice_example_bare_metal_pipeline_single_thread"
+TARGET="dsp_host_pipeline"
 
 if [[ "${1:-}" == "--clean" ]]; then
     echo "Cleaning build directory..."
@@ -39,12 +39,12 @@ if [[ -n "${FLATBUFFERS_H}" && -f "${FLATBUFFERS_H}" ]]; then
 fi
 
 echo "Configuring..."
-cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}/modules/voice" -DCMAKE_BUILD_TYPE=Release
+cmake -B "${BUILD_DIR}" -S "${REPO_ROOT}/tools/dsp_host" -DCMAKE_BUILD_TYPE=Release
 
 echo "Building..."
 cmake --build "${BUILD_DIR}" --target "${TARGET}" -j"$(nproc)"
 
-BINARY="${BUILD_DIR}/examples/bare-metal/pipeline_single_threaded/bin/${TARGET}"
+BINARY="${BUILD_DIR}/bin/${TARGET}"
 echo
 echo "Build complete:"
 ls -lh "${BINARY}"

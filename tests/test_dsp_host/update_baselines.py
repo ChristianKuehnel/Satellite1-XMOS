@@ -19,7 +19,8 @@ from pathlib import Path
 TEST_DIR = Path(__file__).parent
 STIMULI_DIR = TEST_DIR / "stimuli"
 BASELINE_DIR = TEST_DIR / "baselines"
-DEFAULT_BINARY = TEST_DIR / "build" / "dsp_pipeline_test"
+REPO_ROOT = TEST_DIR.parent.parent
+DEFAULT_BINARY = REPO_ROOT / "build-host" / "bin" / "dsp_host_pipeline"
 
 
 def main():

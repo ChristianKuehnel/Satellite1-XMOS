@@ -13,8 +13,8 @@ BUILD_HOST_DIR = REPO_ROOT / "build-host"
 
 DEFAULT_BINARY = (
     BUILD_HOST_DIR
-    / "examples" / "bare-metal" / "pipeline_single_threaded" / "bin"
-    / "fwk_voice_example_bare_metal_pipeline_single_thread"
+    / "bin"
+    / "dsp_host_pipeline"
 )
 
 

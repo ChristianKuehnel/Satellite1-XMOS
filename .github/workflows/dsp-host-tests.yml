@@ -8,6 +8,7 @@ on:
       - 'tests/test_dsp_host/**'
       - 'tools/build_dsp_host.sh'
       - 'tools/setup_dsp_host.sh'
+      - 'tools/dsp_host/**'
       - 'requirements_tests_dsp.txt'
       - '.github/workflows/dsp-host-tests.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'tests/test_dsp_host/**'
       - 'tools/build_dsp_host.sh'
       - 'tools/setup_dsp_host.sh'
+      - 'tools/dsp_host/**'
       - 'requirements_tests_dsp.txt'
       - '.github/workflows/dsp-host-tests.yml'
   workflow_dispatch:
@@ -48,15 +50,15 @@ jobs:
       - name: Run Layer 1 gates
         run: |
           pytest tests/test_dsp_host/test_dsp_gates.py -v \
-            --dsp-binary build-host/examples/bare-metal/pipeline_single_threaded/bin/fwk_voice_example_bare_metal_pipeline_single_thread
+            --dsp-binary build-host/bin/dsp_host_pipeline
 
       - name: Run Layer 2 regression
         run: |
           pytest tests/test_dsp_host/test_dsp_regression.py -v \
-            --dsp-binary build-host/examples/bare-metal/pipeline_single_threaded/bin/fwk_voice_example_bare_metal_pipeline_single_thread
+            --dsp-binary build-host/bin/dsp_host_pipeline
 
       - name: Run Layer 3 informational
         if: always()
         run: |
           pytest tests/test_dsp_host/test_dsp_informational.py -v \
-            --dsp-binary build-host/examples/bare-metal/pipeline_single_threaded/bin/fwk_voice_example_bare_metal_pipeline_single_thread
+            --dsp-binary build-host/bin/dsp_host_pipeline
