@@ -63,8 +63,15 @@ urlencode() {
 }
 
 # api METHOD PATH [JSON_BODY]  -> prints response body
+# PATH is either a repo-relative path (e.g. /releases) or an absolute URL
+# (e.g. the `url` field the API returns for a release asset).
 api() {
     local method="$1" path="$2" body="${3-}"
+    local url
+    case "$path" in
+        http*) url="$path" ;;
+        *)     url="$API/repos/$REPO$path" ;;
+    esac
     local -a args=(-sS -X "$method"
         -H "Authorization: Bearer $TOKEN"
         -H "Accept: application/vnd.github+json"
@@ -72,12 +79,17 @@ api() {
     if [ -n "$body" ]; then
         args+=(--data "$body")
     fi
-    curl "${args[@]}" "$API/repos/$REPO$path"
+    curl "${args[@]}" "$url"
 }
 
 # http_code METHOD PATH [JSON_BODY] -> prints HTTP status code
 http_code() {
     local method="$1" path="$2" body="${3-}"
+    local url
+    case "$path" in
+        http*) url="$path" ;;
+        *)     url="$API/repos/$REPO$path" ;;
+    esac
     local -a args=(-sS -o /dev/null -w "%{http_code}" -X "$method"
         -H "Authorization: Bearer $TOKEN"
         -H "Accept: application/vnd.github+json"
@@ -85,7 +97,7 @@ http_code() {
     if [ -n "$body" ]; then
         args+=(--data "$body")
     fi
-    curl "${args[@]}" "$API/repos/$REPO$path"
+    curl "${args[@]}" "$url"
 }
 
 # release_exists TAG -> exit 0 if a release for this tag exists
@@ -149,15 +161,25 @@ publish_assets_to_release() {
     done
 }
 
-# delete_release_assets RELEASE_ID -> removes all existing assets
+# delete_release_assets RELEASE_ID -> removes all existing assets (loud on failure)
+#
+# The per-asset DELETE must target each asset's own canonical URL (the `url`
+# field the API returns, e.g. .../releases/assets/<id>). The
+# releases/<release_id>/assets/<id> form 404s for these assets, which previously
+# left stale assets behind and made the next upload fail with `already_exists`.
 delete_release_assets() {
     local release_id="$1"
-    local ids id
-    ids=$(api GET "/releases/$release_id/assets?per_page=100" | jq -r '.[].id')
-    for id in $ids; do
-        [ -n "$id" ] || continue
-        api DELETE "/releases/$release_id/assets/$id" >/dev/null
-    done
+    local rows name url code
+    rows="$(api GET "/releases/$release_id/assets?per_page=100" | jq -r '.[] | "\(.name)\t\(.url)"')"
+    while IFS=$'\t' read -r name url; do
+        [ -n "$url" ] || continue
+        code="$(http_code DELETE "$url" || true)"
+        if [ "$code" != "204" ]; then
+            echo "ERROR: failed to delete asset '$name' (HTTP $code)" >&2
+            return 1
+        fi
+        echo "    deleted: $name"
+    done <<< "$rows"
 }
 
 RELEASE_BODY="$(cat <<EOF
