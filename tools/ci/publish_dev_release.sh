@@ -104,7 +104,7 @@ create_release() {
     local payload raw id
     payload=$(jq -n \
         --arg tag "$tag" --arg name "$name" --arg body "$body" --arg commit "$commit" \
-        '{tag_name:$tag, name:$name, body:$body, prerelease:true, make_latest:false, target_commitish:$commit, draft:false}')
+        '{tag_name:$tag, name:$name, body:$body, prerelease:true, make_latest:"false", target_commitish:$commit, draft:false}')
     raw="$(api POST /releases "$payload")"
     id="$(printf '%s' "$raw" | jq -r '.id // empty')"
     if [ -z "$id" ]; then
