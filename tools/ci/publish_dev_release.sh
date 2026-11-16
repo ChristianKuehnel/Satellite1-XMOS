@@ -72,7 +72,7 @@ api() {
     if [ -n "$body" ]; then
         args+=(--data "$body")
     fi
-    curl "${args[@]}" "$API/$REPO$path"
+    curl "${args[@]}" "$API/repos/$REPO$path"
 }
 
 # http_code METHOD PATH [JSON_BODY] -> prints HTTP status code
@@ -85,7 +85,7 @@ http_code() {
     if [ -n "$body" ]; then
         args+=(--data "$body")
     fi
-    curl "${args[@]}" "$API/$REPO$path"
+    curl "${args[@]}" "$API/repos/$REPO$path"
 }
 
 # release_exists TAG -> exit 0 if a release for this tag exists
@@ -98,26 +98,39 @@ release_id_for_tag() {
     api GET "/releases/tags/$1" 2>/dev/null | jq -r '.id // empty'
 }
 
-# create_release TAG NAME BODY COMMIT -> prints new release id
+# create_release TAG NAME BODY COMMIT -> prints new release id (exits non-zero on failure)
 create_release() {
     local tag="$1" name="$2" body="$3" commit="$4"
-    local payload
+    local payload raw id
     payload=$(jq -n \
         --arg tag "$tag" --arg name "$name" --arg body "$body" --arg commit "$commit" \
         '{tag_name:$tag, name:$name, body:$body, prerelease:true, make_latest:false, target_commitish:$commit, draft:false}')
-    api POST /releases "$payload" | jq -r '.id'
+    raw="$(api POST /releases "$payload")"
+    id="$(printf '%s' "$raw" | jq -r '.id // empty')"
+    if [ -z "$id" ]; then
+        echo "ERROR: failed to create release '$tag'. API response:" >&2
+        printf '%s\n' "$raw" >&2
+        return 1
+    fi
+    printf '%s' "$id"
 }
 
 # upload_asset RELEASE_ID NAME FILE
 upload_asset() {
     local release_id="$1" name="$2" file="$3"
-    curl -sS -X POST \
+    local resp
+    resp="$(curl -sS -X POST \
         -H "Authorization: Bearer $TOKEN" \
         -H "Accept: application/vnd.github+json" \
         -H "Content-Type: application/octet-stream" \
         -H "X-GitHub-Api-Version: 2022-11-28" \
         --data-binary "@$file" \
-        "https://uploads.github.com/repos/$REPO/releases/$release_id/assets?name=$(urlencode "$name")" >/dev/null
+        "https://uploads.github.com/repos/$REPO/releases/$release_id/assets?name=$(urlencode "$name")")"
+    if ! printf '%s' "$resp" | jq -e '.id' >/dev/null 2>&1; then
+        echo "ERROR: failed to upload asset '$name' to release $release_id. API response:" >&2
+        printf '%s\n' "$resp" >&2
+        return 1
+    fi
     echo "    uploaded: $name"
 }
 
