@@ -252,11 +252,25 @@ NEW_JSON="$(jq -n \
     ')"
 
 B64="$(printf '%s' "$NEW_JSON" | base64 -w0)"
-BLOB_ID="$(api POST /git/blobs "$(jq -n --arg c "$B64" '{content:$c, encoding:"base64"}')" | jq -r '.sha')"
-TREE_ID="$(api POST /git/trees "$(jq -n --arg s "$BLOB_ID" '{tree:[{path:"releases.json",mode:"100644",type:"blob",sha:$s}]}')" | jq -r '.sha')"
-COMMIT_ID="$(api POST /git/commits "$(jq -n --arg t "$TREE_ID" --arg msg "Update dev releases index ($PINNED_TAG)" '{message:$msg, tree:$t}')" | jq -r '.sha')"
-api PUT "/git/refs/heads/$PAGES_BRANCH" \
-    "$(jq -n --arg ref "refs/heads/$PAGES_BRANCH" --arg sha "$COMMIT_ID" '{ref:$ref, sha:$sha}')" >/dev/null
+BLOB_ID="$(api POST /git/blobs "$(jq -n --arg c "$B64" '{content:$c, encoding:"base64"}')" | jq -r '.sha // empty')"
+[ -n "$BLOB_ID" ] || { echo "ERROR: failed to create git blob for index"; exit 1; }
+TREE_ID="$(api POST /git/trees "$(jq -n --arg s "$BLOB_ID" '{tree:[{path:"releases.json",mode:"100644",type:"blob",sha:$s}]}')" | jq -r '.sha // empty')"
+[ -n "$TREE_ID" ] || { echo "ERROR: failed to create git tree for index"; exit 1; }
+COMMIT_ID="$(api POST /git/commits "$(jq -n --arg t "$TREE_ID" --arg msg "Update dev releases index ($PINNED_TAG)" '{message:$msg, tree:$t}')" | jq -r '.sha // empty')"
+[ -n "$COMMIT_ID" ] || { echo "ERROR: failed to create git commit for index"; exit 1; }
+
+# PUT /git/refs/heads/<branch> only works when the ref already exists (it 422s
+# otherwise); creating a brand-new branch must use POST /git/refs.
+if [ "$(http_code GET "/git/refs/heads/$PAGES_BRANCH")" = "200" ]; then
+    echo ">> Updating existing '$PAGES_BRANCH' branch ref"
+    REF_RESP="$(api PUT "/git/refs/heads/$PAGES_BRANCH" "$(jq -n --arg sha "$COMMIT_ID" --argjson force true '{sha:$sha, force:$force}')" | cat)"
+else
+    echo ">> Creating new '$PAGES_BRANCH' branch at $COMMIT_ID"
+    REF_RESP="$(api POST /git/refs "$(jq -n --arg ref "refs/heads/$PAGES_BRANCH" --arg sha "$COMMIT_ID" '{ref:$ref, sha:$sha}')" | cat)"
+fi
+echo "    ref response: $(jq -c '{ref:(.ref // "null"), sha:(.object.sha // "null")}' <<<"$REF_RESP" 2>/dev/null)"
+[ "$(jq -r '.ref // empty' <<<"$REF_RESP" 2>/dev/null)" = "refs/heads/$PAGES_BRANCH" ] \
+    || { echo "ERROR: failed to set '$PAGES_BRANCH' branch ref"; exit 1; }
 
 echo ">> Index published to https://raw.githubusercontent.com/$REPO/heads/$PAGES_BRANCH/releases.json"
 echo ">> Done."
