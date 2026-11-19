@@ -9,6 +9,16 @@ Uses the 'Automatic Delay Estimation and Correction' pipeline of the sln_voice e
 
 A variant which bypasses the mic-pipeline. Hence, the raw mic signal is streamed to the ESP32-S3.
 
+**satellite1_firmware_fixed_delay_4mic** (experimental)
+
+Uses all four HAT microphones: 4-mic x 1-ref AEC followed by two IC paths (E/W and N/S), the best output selected by VNR.
+
+**satellite1_firmware_fixed_delay_4mic_bf** (experimental)
+
+Four-microphone beamformer variant: 8 fixed delay-and-sum beams, IC runs on the look and opposite beam with energy-based beam selection.
+
+See `docs/four-mic-array.md` for details, known limitations and diagnostics.
+
 ## Firmware Files
 
 **variant_name.factory.bin**
@@ -33,19 +43,102 @@ initial flash (the Satellite1 ships without pre-flashed XMOS firmware).
 
 **Prerequisites:**
 - ESPHome firmware with the `satellite1` board platform is running
-- The `embed_flash_image` package is included in the ESPHome configuration
+- The configuration contains a `memory_flasher` with `platform: satellite1`
+  and an `embed_flash_image` block (in the current Satellite1-ESPHome
+  firmware this is the built-in flasher `xflash` in
+  `config/satellite1.base.yaml`)
 
 **Steps:**
 1. Build the factory image: `make create_flash_img_satellite1_firmware_fixed_delay`
 2. Copy `satellite1_firmware_fixed_delay.factory.bin` and `.factory.md5` to
    the ESPHome build directory (or use the auto-generated
-   `build/embed_flash_imag.yaml`).
-3. Update the `image_version` in your ESPHome config to match
-   `firmware_version.txt`.
+   `build/embed_flash_imag.yaml`, which already contains the correct
+   `image_version` and local paths).
+3. Update the `image_version` in your ESPHome config to the version embedded
+   in the image (see `build/embed_flash_imag.yaml`; for `dev` in
+   `firmware_version.txt` the build resolves the actual dev version, e.g.
+   `v1.1.0-dev` or `v1.1.0-dev.100` with `-DUSE_DEV_TRACKING=ON`).
 4. Re-flash the ESPHome firmware. On boot, the `memory_flasher` component
    writes the XMOS image to QSPI and verifies the MD5 checksum.
 
 See `docs/versioning.md` for the full ESPHome YAML integration.
+
+## Testing a new firmware on the device via ESPHome
+
+To test a new firmware build (an automatic dev build from GitHub or a local
+build) on the device, the factory image is embedded into the ESP32 firmware
+and the `memory_flasher` component writes it to the XMOS QSPI flash. The
+Satellite1-ESPHome firmware does this automatically on boot by default: if
+the XMOS does not respond, or reports a version different from the embedded
+image, the embedded image is flashed. Set the substitution
+`xmos_auto_flash_on_boot: "false"` to keep manual control instead (the
+dashboard then offers a manual XMOS flash button).
+
+### Using an automatic dev build from GitHub
+
+The **Dev Build** workflow publishes factory images to GitHub Releases on
+every push to `develop` (see [Development builds](#development-builds)). No
+local toolchain is required:
+
+1. Download the factory image (and checksum) from the rolling `dev-latest`
+   release, or from a pinned `dev-YYYYMMDD-<sha>` release for a specific
+   commit:
+
+   ```bash
+   curl -LO https://github.com/FutureProofHomes/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin
+   curl -LO https://github.com/FutureProofHomes/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin.sha256
+   sha256sum -c satellite1_firmware_fixed_delay.factory.bin.sha256
+   ```
+
+2. The flasher verifies images by MD5, but dev releases only carry a
+   `.sha256` checksum. Generate an MD5 file next to the image:
+
+   ```bash
+   md5sum -q satellite1_firmware_fixed_delay.factory.bin > satellite1_firmware_fixed_delay.factory.md5
+   ```
+
+3. In your final ESPHome YAML (Satellite1-ESPHome), extend the built-in
+   flasher `xflash` with the dev image:
+
+   ```yaml
+   memory_flasher:
+     - id: !extend xflash
+       embed_flash_image:
+         image_version: v1.1.0-dev
+         image_file: /path/to/satellite1_firmware_fixed_delay.factory.bin
+         md5_file: /path/to/satellite1_firmware_fixed_delay.factory.md5
+   ```
+
+   `image_version` must be a valid version string (e.g. `v1.1.0-dev`); it is
+   the version compiled into the dev build (stated in the release body) and
+   the one the device compares against on boot.
+
+4. Build and upload the ESP32 firmware:
+
+   ```bash
+   esphome compile config/satellite1.yaml
+   esphome upload config/satellite1.yaml
+   ```
+
+The MD5 is checked at ESPHome compile time and again on the device while
+flashing. After the reboot the device flashes the embedded image and reports
+the new version in the boot log and the `xmos_firmware_version_text` text
+sensor.
+
+### Using a local build
+
+1. Build the factory image (see [Building the firmware locally](#building-the-firmware-locally)).
+   The build generates `satellite1_firmware_fixed_delay.factory.md5` and an
+   auto-generated `build/embed_flash_imag.yaml` flasher snippet containing
+   the exact `image_version` and the local image paths.
+2. Merge that snippet into the ESPHome configuration (extend the built-in
+   flasher `xflash`), then build and upload the ESP32 firmware as above.
+
+The experimental four-mic variants follow the same flow: build
+`create_flash_img_satellite1_firmware_fixed_delay_4mic` (or `_4mic_bf`) and
+point the flasher at that factory image. NS, AGC and the I2S output are
+identical to the production variant, so no other ESPHome changes are needed
+(see `docs/four-mic-array.md`).
 
 ## Flashing via dfu-util
 > **Note:** The Satellite1 does not come with a pre-flashed XMOS firmware. Hence, the initial firmware needs to be written directly to the flash memory via SPI. Use 'Flashing via Satellite1 ESPHome Firmware' in this case.  
@@ -96,11 +189,14 @@ The workflow also maintains a machine-readable index served from the GitHub
 Pages branch:
 
 ```
-https://raw.githubusercontent.com/FutureProofHomes/Satellite1-XMOS/gh-pages/releases.json
+https://raw.githubusercontent.com/FutureProofHomes/Satellite1-XMOS/heads/gh-pages/releases.json
 ```
 
 It lists the current `dev-latest` build plus the most recent pinned builds
 (commit, version, `git describe`, timestamp, and release URL).
+
+To install one of these dev builds on the device, see
+[Testing a new firmware on the device via ESPHome](#testing-a-new-firmware-on-the-device-via-esphome).
 
 A **Dev Cleanup** workflow (`.github/workflows/dev-cleanup.yml`) runs monthly to
 delete pinned `dev-*` pre-releases older than 180 days. It never removes
