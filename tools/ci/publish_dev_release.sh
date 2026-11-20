@@ -28,7 +28,7 @@
 #   DEV_LATEST_TAG          rolling tag (default: dev-latest)
 #   DEV_BUILD_DATE          ISO-8601 UTC build timestamp
 #   DEV_BUILD_BRANCH        source branch name
-#   ASSETS_DIR              directory containing the .bin and .sha256 assets
+#   ASSETS_DIR              directory containing the .bin, .sha256 and .md5 assets
 #
 # Optional environment:
 #   GH_PAGES_BRANCH         default: gh-pages
@@ -146,7 +146,7 @@ upload_asset() {
     echo "    uploaded: $name"
 }
 
-# publish_assets_to_release RELEASE_ID  -> uploads every .bin and .sha256 in ASSETS_DIR
+# publish_assets_to_release RELEASE_ID  -> uploads every .bin, .sha256 and .md5 in ASSETS_DIR
 publish_assets_to_release() {
     local release_id="$1"
     local f base
@@ -154,7 +154,7 @@ publish_assets_to_release() {
         [ -f "$f" ] || continue
         base="$(basename "$f")"
         case "$base" in
-            *.bin|*.sha256)
+            *.bin|*.sha256|*.md5)
                 upload_asset "$release_id" "$base" "$f"
                 ;;
         esac

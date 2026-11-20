@@ -34,6 +34,18 @@ A firmware upgrade image that can be uploaded through the Device Firmware Update
 
 The XMOS executable (XE) binary format stores programs for XMOS devices and includes information about the system it is intended to run on, allowing support for multiple program loads, configurations and debugging.
 
+### Which file do I need?
+
+| Scenario | File | Method |
+|----------|------|--------|
+| First flash, blank flash, or full re-flash (the Satellite1 ships without pre-flashed XMOS firmware) | `variant_name.factory.bin` | ESPHome `memory_flasher` (the only way to write the Satellite1's QSPI flash), or `xflash` via an xTAG |
+| Update a device that already runs a DFU-capable firmware | `variant_name.upgrade.bin` | `dfu-util -e -a 1 -D variant_name.upgrade.bin` over USB |
+| Run or debug on an xTAG (developer board) | `variant_name.xe` | `xrun` or `xflash` |
+
+Every release and dev release publishes a bare-hex **`.md5`** file per image
+(the format the ESPHome `memory_flasher` verifies) plus a **`.sha256`** file
+for manual verification. Local builds generate the `.md5` files automatically.
+
 
 ## Flashing via Satellite1 ESPHome Firmware
 
@@ -80,38 +92,39 @@ The **Dev Build** workflow publishes factory images to GitHub Releases on
 every push to `develop` (see [Development builds](#development-builds)). No
 local toolchain is required:
 
-1. Download the factory image (and checksum) from the rolling `dev-latest`
-   release, or from a pinned `dev-YYYYMMDD-<sha>` release for a specific
-   commit:
-
-   ```bash
-   curl -LO https://github.com/FutureProofHomes/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin
-   curl -LO https://github.com/FutureProofHomes/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin.sha256
-   sha256sum -c satellite1_firmware_fixed_delay.factory.bin.sha256
-   ```
-
-2. The flasher verifies images by MD5, but dev releases only carry a
-   `.sha256` checksum. Generate an MD5 file next to the image:
-
-   ```bash
-   md5sum -q satellite1_firmware_fixed_delay.factory.bin > satellite1_firmware_fixed_delay.factory.md5
-   ```
-
-3. In your final ESPHome YAML (Satellite1-ESPHome), extend the built-in
-   flasher `xflash` with the dev image:
+1. In your final ESPHome YAML (Satellite1-ESPHome), point the built-in
+   flasher `xflash` directly at the release assets — **no local download
+   required** (`image_file`/`md5_file` accept URLs):
 
    ```yaml
    memory_flasher:
      - id: !extend xflash
        embed_flash_image:
-         image_version: v1.1.0-dev
-         image_file: /path/to/satellite1_firmware_fixed_delay.factory.bin
-         md5_file: /path/to/satellite1_firmware_fixed_delay.factory.md5
+         image_version: v0.0.0-dev
+         image_file: https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin
+         md5_file: https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.md5
    ```
 
-   `image_version` must be a valid version string (e.g. `v1.1.0-dev`); it is
-   the version compiled into the dev build (stated in the release body) and
-   the one the device compares against on boot.
+   `dev-latest` always serves the newest dev build; use a pinned
+   `dev-YYYYMMDD-<sha>` release tag instead to pin a specific commit.
+   `image_version` must match the version compiled into the build — it is
+   stated in the release body (and in the [releases.json index](#development-builds))
+   — and is the one the device compares against on boot.
+
+   <details>
+   <summary>Alternative: download the image locally first</summary>
+
+   ```bash
+   curl -LO https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin
+   curl -LO https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.factory.bin.sha256
+   sha256sum -c satellite1_firmware_fixed_delay.factory.bin.sha256
+   ```
+
+   Dev releases carry a bare-hex `.factory.md5` asset (the format the
+   flasher expects), so there is no need to compute the MD5 yourself.
+   Point `image_file`/`md5_file` at the local files instead of the URLs.
+
+   </details>
 
    > **Note:** `!extend xflash` only works if the `xflash` flasher is part of
    > the final config — i.e. you compile a YAML that includes
@@ -125,7 +138,7 @@ local toolchain is required:
    > writes the complete flash image to QSPI. The `.upgrade.bin` is the DFU
    > payload and must not be used with `embed_flash_image`.
 
-4. Build and upload the ESP32 firmware:
+2. Build and upload the ESP32 firmware:
 
    ```bash
    esphome compile config/satellite1.yaml
@@ -161,6 +174,13 @@ If the XMOS device is running a factory firmware with DFU over USB support, an u
 dfu-util -e -a 1 -D variant_name.upgrade.bin
 ```
 
+To update directly from a GitHub release without downloading the file first,
+`dfu-util` can read the image from stdin:
+```bash
+curl -sL https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/download/dev-latest/satellite1_firmware_fixed_delay.upgrade.bin \
+  | dfu-util -e -a 1 -D -
+```
+
 
 ## Running / Flashing via xTAG
 > **Note**: The Satellite1 does not include an xTAG debugger. This option applies only when testing the firmware with a developer board like the XCORE.AI EVALUATION KIT. 
@@ -188,10 +208,11 @@ Two kinds of development release are produced:
 - **`dev-latest`** – a rolling pre-release that always points at the most recent successful build. Its assets are replaced on each push.
 - **`dev-YYYYMMDD-<sha>`** – an immutable pre-release per push. Each push keeps a permanent, addressable artifact that is never overwritten.
 
-Each release contains:
+Every release contains, for each variant built from `tools/ci/firmwares.txt`
+(currently `fixed_delay`, `bypass`, `fixed_delay_4mic` and `fixed_delay_4mic_bf`):
 
-- `satellite1_firmware_fixed_delay.factory.bin` (+ `.sha256`) – full flash image
-- `satellite1_firmware_fixed_delay.upgrade.bin` (+ `.sha256`) – DFU upgrade image
+- `satellite1_firmware_<variant>.factory.bin` (+ `.factory.md5` + `.sha256`) – full flash image
+- `satellite1_firmware_<variant>.upgrade.bin` (+ `.upgrade.md5` + `.sha256`) – DFU upgrade image
 
 The exact commit embedded in each binary can be recovered from `git describe`:
 the build identifier is compiled into the image and reported by the DFU
@@ -201,7 +222,7 @@ The workflow also maintains a machine-readable index served from the GitHub
 Pages branch:
 
 ```
-https://raw.githubusercontent.com/FutureProofHomes/Satellite1-XMOS/heads/gh-pages/releases.json
+https://raw.githubusercontent.com/ChristianKuehnel/Satellite1-XMOS/heads/gh-pages/releases.json
 ```
 
 It lists the current `dev-latest` build plus the most recent pinned builds
@@ -223,7 +244,7 @@ delete pinned `dev-*` pre-releases older than 180 days. It never removes
 ### Clone repository
 
 ```bash
-git clone https://github.com/FutureProofHomes/Satellite1-XMOS.git
+git clone https://github.com/ChristianKuehnel/Satellite1-XMOS.git
 cd Satellite1-XMOS
 git submodule update --init --recursive
 ```

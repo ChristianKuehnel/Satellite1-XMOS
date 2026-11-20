@@ -12,7 +12,7 @@
 
 ```bash
 # 1. Clone with submodules
-git clone https://github.com/FutureProofHomes/Satellite1-XMOS.git
+git clone https://github.com/ChristianKuehnel/Satellite1-XMOS.git
 cd Satellite1-XMOS
 git submodule update --init --recursive
 

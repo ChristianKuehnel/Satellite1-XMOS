@@ -90,9 +90,13 @@ jobs:
           shopt -s nullglob
           for b in dist/*.bin; do
             bn="$(basename "$b")"
+            base="${bn%.bin}"
             cp "$b" "assets/$bn"
-            ( cd dist && sha256sum "$bn" > "../assets/$bn.sha256" )
-            echo "staged: $bn + $bn.sha256"
+            # .sha256 for manual verification; bare-hex .md5 (same format the
+            # build produces) for the ESPHome memory_flasher.
+            ( cd dist && sha256sum "$bn" > "../assets/$bn.sha256" \
+                     && md5sum "$bn" | cut -d' ' -f1 > "../assets/${base}.md5" )
+            echo "staged: $bn + $bn.sha256 + ${base}.md5"
           done
           if [ -z "$(ls -A assets)" ]; then
             echo "ERROR: no .bin artifacts produced in dist/"

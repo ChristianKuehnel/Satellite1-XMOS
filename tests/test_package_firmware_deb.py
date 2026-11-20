@@ -101,3 +101,61 @@ def test_rejects_non_release_version(tmp_path: Path):
 
     assert result.returncode != 0
     assert "firmware version must be a release version" in result.stderr
+
+
+@pytest.mark.skipif(DPKG_DEB is None, reason="dpkg-deb is required for Debian package tests")
+def test_packages_requested_variant_from_multi_variant_dist(tmp_path: Path):
+    dist = tmp_path / "dist"
+    output = tmp_path / "output"
+    dist.mkdir()
+    for name in ("satellite1_firmware_fixed_delay", "satellite1_firmware_bypass"):
+        (dist / f"{name}.factory.bin").write_bytes(f"factory {name}".encode())
+        (dist / f"{name}.upgrade.bin").write_bytes(f"update {name}".encode())
+    version_file = tmp_path / "firmware_version.txt"
+    version_file.write_text("v1.2.3\n")
+
+    result = subprocess.run(
+        [
+            "bash", str(SCRIPT), "--dist-dir", str(dist), "--output-dir", str(output),
+            "--version-file", str(version_file), "--control-template", str(CONTROL_TEMPLATE),
+            "--variant", "satellite1_firmware_fixed_delay",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    package = output / "satellite1-xmos-firmware_1.2.3-1_all.deb"
+    assert package.is_file(), result.stdout
+    extracted = tmp_path / "extracted"
+    subprocess.run([DPKG_DEB, "-x", package, extracted], check=True)
+    payload = extracted / "usr/lib/firmware/satellite1/xmos"
+    manifest = json.loads((payload / "manifest.json").read_text())
+    assert manifest["factory_image"] == "satellite1_firmware_fixed_delay.factory.bin"
+    assert manifest["update_image"] == "satellite1_firmware_fixed_delay.upgrade.bin"
+    assert manifest["factory_image_sha256"] == hashlib.sha256((dist / "satellite1_firmware_fixed_delay.factory.bin").read_bytes()).hexdigest()
+    assert manifest["update_image_sha256"] == hashlib.sha256((dist / "satellite1_firmware_fixed_delay.upgrade.bin").read_bytes()).hexdigest()
+    # The other variant must not be packaged.
+    assert not (payload / "satellite1_firmware_bypass.factory.bin").is_file()
+
+
+def test_rejects_unknown_variant(tmp_path: Path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "satellite1_firmware_fixed_delay.factory.bin").write_bytes(b"factory")
+    (dist / "satellite1_firmware_fixed_delay.upgrade.bin").write_bytes(b"update")
+    version_file = tmp_path / "firmware_version.txt"
+    version_file.write_text("v1.2.3\n")
+
+    result = subprocess.run(
+        [
+            "bash", str(SCRIPT), "--dist-dir", str(dist), "--output-dir", str(tmp_path / "output"),
+            "--version-file", str(version_file), "--control-template", str(CONTROL_TEMPLATE),
+            "--variant", "satellite1_firmware_does_not_exist",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "firmware image is not a regular file" in result.stderr

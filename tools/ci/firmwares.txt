@@ -1,1 +1,7 @@
-satellite1_fixed  satellite1_firmware_fixed_delay No  SATELLITE1   xmos_cmake_toolchain/xs3a.cmake
+# CI build manifest for the Satellite1 firmware.
+# Format: name app_target run_data_partition_target BOARD toolchain
+# (lines starting with '#' and blank lines are ignored)
+satellite1_fixed    satellite1_firmware_fixed_delay         No  SATELLITE1  xmos_cmake_toolchain/xs3a.cmake
+satellite1_bypass   satellite1_firmware_bypass              No  SATELLITE1  xmos_cmake_toolchain/xs3a.cmake
+satellite1_4mic     satellite1_firmware_fixed_delay_4mic    No  SATELLITE1  xmos_cmake_toolchain/xs3a.cmake
+satellite1_4mic_bf  satellite1_firmware_fixed_delay_4mic_bf No  SATELLITE1  xmos_cmake_toolchain/xs3a.cmake

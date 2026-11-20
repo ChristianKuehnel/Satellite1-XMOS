@@ -130,7 +130,9 @@ jobs:
         env:
           PACKAGE_REVISION: ${{ inputs.package_revision }}
         run: |
-          bash tools/ci/package_firmware_deb.sh
+          # The manifest can contain several firmware variants; the .deb
+          # package ships the production fixed_delay variant only.
+          bash tools/ci/package_firmware_deb.sh --variant satellite1_firmware_fixed_delay
 
       - name: Determine artifact name
         run: |

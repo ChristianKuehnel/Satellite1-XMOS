@@ -8,6 +8,7 @@ output_dir="$dist_dir"
 version_file="$repo_root/firmware_version.txt"
 control_template="$repo_root/debian/control.in"
 package_revision="${PACKAGE_REVISION:-1}"
+variant="${FIRMWARE_VARIANT:-}"
 
 usage() {
     cat <<'EOF'
@@ -22,6 +23,10 @@ Options:
   --version-file FILE     Firmware version source (default: firmware_version.txt)
   --control-template FILE Debian control template (default: debian/control.in)
   --package-revision REV  Debian packaging revision (default: PACKAGE_REVISION or 1)
+  --variant NAME          App target to package (e.g. satellite1_firmware_fixed_delay).
+                          Selects NAME.factory.bin and NAME.upgrade.bin from the
+                          distribution directory. If omitted, exactly one variant
+                          must be present. (default: FIRMWARE_VARIANT or auto)
 EOF
 }
 
@@ -32,6 +37,7 @@ while (($#)); do
         --version-file) version_file="$2"; shift 2 ;;
         --control-template) control_template="$2"; shift 2 ;;
         --package-revision) package_revision="$2"; shift 2 ;;
+        --variant) variant="$2"; shift 2 ;;
         --help|-h) usage; exit 0 ;;
         *) echo "ERROR: unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -65,19 +71,28 @@ if [[ ! "$package_revision" =~ ^[A-Za-z0-9.+~]+$ ]]; then
 fi
 package_version="${debian_upstream_version}-${package_revision}"
 
-shopt -s nullglob
-factory_images=("$dist_dir"/*.factory.bin)
-update_images=("$dist_dir"/*.upgrade.bin)
-shopt -u nullglob
-if ((${#factory_images[@]} != 1)); then
-    echo "ERROR: expected exactly one *.factory.bin in $dist_dir; found ${#factory_images[@]}" >&2
-    exit 1
+if [[ -n "$variant" ]]; then
+    # A variant was requested explicitly: pick its images from the dist dir.
+    factory_image_path="$dist_dir/${variant}.factory.bin"
+    update_image_path="$dist_dir/${variant}.upgrade.bin"
+else
+    # No variant requested: the dist dir must contain exactly one variant.
+    shopt -s nullglob
+    factory_images=("$dist_dir"/*.factory.bin)
+    update_images=("$dist_dir"/*.upgrade.bin)
+    shopt -u nullglob
+    if ((${#factory_images[@]} != 1)); then
+        echo "ERROR: expected exactly one *.factory.bin in $dist_dir; found ${#factory_images[@]}" >&2
+        exit 1
+    fi
+    if ((${#update_images[@]} != 1)); then
+        echo "ERROR: expected exactly one *.upgrade.bin in $dist_dir; found ${#update_images[@]}" >&2
+        exit 1
+    fi
+    factory_image_path="${factory_images[0]}"
+    update_image_path="${update_images[0]}"
 fi
-if ((${#update_images[@]} != 1)); then
-    echo "ERROR: expected exactly one *.upgrade.bin in $dist_dir; found ${#update_images[@]}" >&2
-    exit 1
-fi
-for image in "${factory_images[0]}" "${update_images[0]}"; do
+for image in "$factory_image_path" "$update_image_path"; do
     if [[ ! -f "$image" ]]; then
         echo "ERROR: firmware image is not a regular file: $image" >&2
         exit 1
@@ -90,10 +105,10 @@ trap cleanup EXIT
 payload_dir="$stage_dir/usr/lib/firmware/satellite1/xmos"
 mkdir -p "$stage_dir/DEBIAN" "$payload_dir" "$output_dir"
 
-factory_name=$(basename "${factory_images[0]}")
-update_name=$(basename "${update_images[0]}")
-cp "${factory_images[0]}" "$payload_dir/$factory_name"
-cp "${update_images[0]}" "$payload_dir/$update_name"
+factory_name=$(basename "$factory_image_path")
+update_name=$(basename "$update_image_path")
+cp "$factory_image_path" "$payload_dir/$factory_name"
+cp "$update_image_path" "$payload_dir/$update_name"
 
 python3 - "$control_template" "$stage_dir/DEBIAN/control" "$package_version" <<'PY'
 from pathlib import Path

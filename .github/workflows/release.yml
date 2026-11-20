@@ -130,9 +130,23 @@ jobs:
 
       - name: Prepare standalone factory assets
         run: |
+          set -euo pipefail
           mkdir -p ${{ env.RELEASE_ASSETS_DIR }}
-          cp ${{ env.RELEASE_SOURCES_DIR }}/satellite1_firmware_fixed_delay.factory.bin ${{ env.RELEASE_ASSETS_DIR }}/satellite1_xmos.factory.bin
-          cp ${{ env.RELEASE_SOURCES_DIR }}/satellite1_firmware_fixed_delay.factory.md5 ${{ env.RELEASE_ASSETS_DIR }}/satellite1_xmos.factory.md5
+          src=${{ env.RELEASE_SOURCES_DIR }}
+          assets=${{ env.RELEASE_ASSETS_DIR }}
+          # Compatibility names used by the ESPHome base configuration.
+          cp "$src/satellite1_firmware_fixed_delay.factory.bin" "$assets/satellite1_xmos.factory.bin"
+          cp "$src/satellite1_firmware_fixed_delay.factory.md5" "$assets/satellite1_xmos.factory.md5"
+          # Per-variant assets (same naming as the dev releases) with an
+          # md5 (memory_flasher) and sha256 file for every firmware image.
+          for bin in "$src"/satellite1_firmware_*.factory.bin "$src"/satellite1_firmware_*.upgrade.bin; do
+            [ -f "$bin" ] || continue
+            bn=$(basename "$bin")
+            base=${bn%.bin}
+            cp "$bin" "$assets/$bn"
+            cp "$src/$base.md5" "$assets/$base.md5"
+            ( cd "$src" && sha256sum "$bn" > "$assets/$bn.sha256" )
+          done
 
       - run: tree ${{ env.RELEASE_SOURCES_DIR }}
       
@@ -141,8 +155,7 @@ jobs:
         with:
           files: |
             ${{ env.RELEASE_SOURCES_DIR }}/${{ env.FIRMWARE_ARTIFACT_NAME }}.zip
-            ${{ env.RELEASE_ASSETS_DIR }}/satellite1_xmos.factory.bin
-            ${{ env.RELEASE_ASSETS_DIR }}/satellite1_xmos.factory.md5
+            ${{ env.RELEASE_ASSETS_DIR }}/*
             ${{ github.workspace }}/release/debian/*.deb
           generate_release_notes: true
           append_body: true
