@@ -113,6 +113,18 @@ local toolchain is required:
    the version compiled into the dev build (stated in the release body) and
    the one the device compares against on boot.
 
+   > **Note:** `!extend xflash` only works if the `xflash` flasher is part of
+   > the final config — i.e. you compile a YAML that includes
+   > `satellite1.base.yaml` (the standard `config/satellite1.yaml` does via
+   > the `home-assistant-voice` package). In a custom/standalone config that
+   > does not, define the flasher instead of extending it: add
+   > `platform: satellite1` as the first key of the list item. Use exactly
+   > one of the two forms; a duplicate `id: xflash` is a validation error.
+   >
+   > Always use the **factory** image (`.factory.bin`) here — the flasher
+   > writes the complete flash image to QSPI. The `.upgrade.bin` is the DFU
+   > payload and must not be used with `embed_flash_image`.
+
 4. Build and upload the ESP32 firmware:
 
    ```bash
