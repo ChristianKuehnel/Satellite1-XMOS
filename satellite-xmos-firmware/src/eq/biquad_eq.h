@@ -18,6 +18,8 @@
 
 #define BIQUAD_EQ_NUM_BANDS 3
 #define BIQUAD_EQ_Q28_SHIFT 28
+#define BIQUAD_EQ_SAMPLE_RATE_HZ 48000
+#define BIQUAD_EQ_CHANNELS 2
 
 typedef struct {
     int32_t x1, x2;  /* input history  */
@@ -50,7 +52,11 @@ static inline int32_t biquad_process_sample(const biquad_coeffs_t *c,
     acc -= (int64_t)c->a1 * (int64_t)s->y1;
     acc -= (int64_t)c->a2 * (int64_t)s->y2;
 
-    int32_t y = (int32_t)(acc >> BIQUAD_EQ_Q28_SHIFT);
+    /* XTC and the host compilers use an arithmetic right shift here. Clamp
+     * before narrowing, and use the same clipped value for feedback. */
+    const int64_t scaled = acc >> BIQUAD_EQ_Q28_SHIFT;
+    const int32_t y = scaled > INT32_MAX ? INT32_MAX :
+                      scaled < INT32_MIN ? INT32_MIN : (int32_t)scaled;
 
     s->x2 = s->x1;
     s->x1 = x;
@@ -81,6 +87,15 @@ static inline void biquad_eq_process_frame(int32_t *buf,
         }
         buf[i * sample_stride] = sample;
     }
+}
+
+/* Apply the EQ to interleaved L/R samples with independent channel state. */
+static inline void biquad_eq_process_stereo(
+    int32_t *buf, biquad_state_t states[BIQUAD_EQ_CHANNELS][BIQUAD_EQ_NUM_BANDS],
+    size_t count)
+{
+    biquad_eq_process_frame(buf, states[0], count, BIQUAD_EQ_CHANNELS);
+    biquad_eq_process_frame(buf + 1, states[1], count, BIQUAD_EQ_CHANNELS);
 }
 
 #endif /* BIQUAD_EQ_H */

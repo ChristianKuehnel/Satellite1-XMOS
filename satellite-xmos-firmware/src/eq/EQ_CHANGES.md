@@ -42,9 +42,15 @@ All bands are **peaking EQ** filters (Robert Bristow-Johnson Audio EQ Cookbook).
 
 The combined response shows three distinct notches at the target frequencies. Bands 1 and 2 overlap in the 1–4 kHz region, creating a broad cut reaching approximately -12 dB. The phase response remains well-behaved with no abrupt discontinuities.
 
+The plot shows the designed electrical filter response, not a measurement of
+the loudspeaker. PR #105 did not include the raw acoustic measurements or the
+measurement setup used to choose the three bands. To validate the tuning,
+measure the same unit with and without EQ and record the enclosure, microphone
+position and distance, playback level, and test environment.
+
 ## Implementation Details
 
-**Sample rate:** 48,000 Hz
+**Sample rate:** 48,000 Hz (enforced at compile time against the DAC I2S configuration)
 **Sample format:** int32_t, 24-bit left-justified
 **Frame size:** 720 samples per channel (240 × 3 SR factor)
 **Channels:** 2 (L/R stereo, processed independently)
@@ -53,8 +59,8 @@ The combined response shows three distinct notches at the target frequencies. Ba
 
 - Coefficients stored in **Q28** format (1 sign bit, 3 integer bits, 28 fractional bits)
 - Q28 chosen because the largest coefficient magnitudes reach ~2.0, well within the [-8, +8) range
-- Multiply-accumulate uses `int64_t`: each product is 32×32 = 64 bits, and the sum of 5 products cannot overflow a 64-bit accumulator
-- Final result shifted right by 28 to return to int32_t sample format
+- Multiply-accumulate uses `int64_t`. For this table, each coefficient magnitude is below 2^29, so the sum of five products with int32_t samples fits in int64_t.
+- Each section shifts the accumulator right by 28 and saturates to int32_t before storing the result in its feedback history. Cuts can still overshoot on transients.
 
 ### Filter Structure
 
@@ -107,6 +113,7 @@ Header-only implementation containing:
 - `biquad_eq_bands[]` — pre-computed Q28 coefficient table for all 3 bands
 - `biquad_process_sample()` — inline Direct Form I biquad
 - `biquad_eq_process_frame()` — applies 3 cascaded biquads to a channel buffer with configurable stride
+- `biquad_eq_process_stereo()` — applies the filter to interleaved stereo, independent of the number of microphones
 
 ### Modified: `satellite-xmos-firmware/src/main.c`
 
@@ -114,13 +121,8 @@ Header-only implementation containing:
 - Inserted EQ processing block in `speaker_pipeline_output()` between the sample packing loop and `rtos_i2s_tx_1()`:
 
 ```c
-/* 3-band parametric EQ on speaker output */
-{
-    static biquad_state_t eq_state_l[BIQUAD_EQ_NUM_BANDS];
-    static biquad_state_t eq_state_r[BIQUAD_EQ_NUM_BANDS];
-    biquad_eq_process_frame(&tmp[0][0][0], eq_state_l, frame_count, appconfAUDIO_PIPELINE_CHANNELS);
-    biquad_eq_process_frame(&tmp[0][0][1], eq_state_r, frame_count, appconfAUDIO_PIPELINE_CHANNELS);
-}
+static biquad_state_t eq_state[BIQUAD_EQ_CHANNELS][BIQUAD_EQ_NUM_BANDS];
+biquad_eq_process_stereo(tmp, eq_state, frame_count);
 ```
 
 ## Computational Cost
@@ -132,23 +134,22 @@ Per frame (720 stereo samples, every 15 ms):
 - Each evaluation: 5 multiplies + 4 adds (int64_t) + 1 shift
 - Approximately 21,600 multiply-accumulate operations per frame
 
-### Estimated Execution Time
+### Hardware Timing (Pending)
 
-The XS3A core runs at 600 MHz, but hardware threads are time-sliced across a 5-stage pipeline. FreeRTOS is configured with `configCPU_CLOCK_HZ = 100000000`, giving each thread an effective **100 MHz**.
+The original PR's ~1.5 ms estimate was for the unsaturated implementation;
+it is not a timing result or a guarantee of scheduling headroom.
+On a Satellite1 running the production and four-mic variants, bracket
+`biquad_eq_process_stereo()` with xCORE reference timer reads. Capture the
+elapsed ticks after the timed region, for example via xSCOPE. Record the
+median and maximum across sustained playback with AEC and normal control
+traffic active. Include loud transitions that exercise clipping. Compare
+against the 15 ms frame period and confirm the complete speaker pipeline
+meets its deadline without underruns or audible glitches. Check that AEC
+still converges during playback.
 
-| Operation | Estimated Cycles |
-|-----------|-----------------|
-| int64_t multiply (32×32→64) | ~5 cycles |
-| int64_t add | ~1 cycle |
-| Shift + state updates + loop overhead | ~6 cycles |
-| **Total per biquad evaluation** | **~35 cycles** |
+## Host Tests
 
-| Metric | Value |
-|--------|-------|
-| Biquad evaluations per frame | 4,320 |
-| Total cycles per frame | ~151,200 |
-| Execution time at 100 MHz | **~1.5 ms** |
-| Frame period | 15 ms |
-| **CPU utilization (this thread)** | **~10%** |
-
-This is comfortably within budget. The speaker pipeline runs two `empty_stage` processing stages (passthrough), so there is very little else competing for time on this thread. Actual cost may vary depending on compiler inlining and instruction scheduling of the 64-bit operations.
+Run `pytest tests/test_dsp_host/test_speaker_eq.py` with a host C compiler and
+the dependencies in `requirements_tests_dsp.txt`. The tests compile and
+exercise the firmware EQ directly: frequency response, impulse and step
+response, full-scale clipping, stereo isolation, and continuity across frames.

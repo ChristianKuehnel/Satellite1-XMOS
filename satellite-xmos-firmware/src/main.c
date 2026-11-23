@@ -49,6 +49,10 @@ static int32_t mic_gain_10x(int32_t sample)
 }
 
 #if ON_TILE(SPEAKER_PIPELINE_TILE_NO)
+_Static_assert(appconfI2S_AUDIO_SAMPLE_RATE == BIQUAD_EQ_SAMPLE_RATE_HZ,
+               "Speaker EQ coefficients require 48 kHz I2S audio");
+_Static_assert(appconfI2S_FRAME_CHANNELS == BIQUAD_EQ_CHANNELS,
+               "Speaker EQ requires stereo I2S frames");
 rtos_osal_queue_t *ref_input_queue;
 #endif
 
@@ -90,25 +94,21 @@ int speaker_pipeline_output(void *output_app_data,
 
     xassert(frame_count == appconfAUDIO_SPK_PIPELINE_FRAME_ADVANCE);
     
-    /* I2S expects sample channel format */
-    int32_t tmp[appconfAUDIO_SPK_PIPELINE_FRAME_ADVANCE][1][appconfI2S_FRAME_CHANNELS];
-    int32_t *tmpptr = (int32_t *)output_audio_frames;
-    for (int j=0; j<frame_count; j++) {
-        tmp[j][0][0] = *(tmpptr+j+(0*frame_count));    // ref 0 -> DAC
-        tmp[j][0][1] = *(tmpptr+j+(1*frame_count));    // ref 1 -> DAC
+    /* Pack the channel-major speaker samples into a flat interleaved I2S buffer. */
+    int32_t tmp[appconfAUDIO_SPK_PIPELINE_FRAME_ADVANCE * appconfI2S_FRAME_CHANNELS];
+    const int32_t *samples = (const int32_t *)output_audio_frames;
+    for (size_t j = 0; j < frame_count; j++) {
+        tmp[j * appconfI2S_FRAME_CHANNELS] = samples[j];
+        tmp[j * appconfI2S_FRAME_CHANNELS + 1] = samples[frame_count + j];
     }
 
-    /* 3-band parametric EQ on speaker output */
-    {
-        static biquad_state_t eq_state_l[BIQUAD_EQ_NUM_BANDS];
-        static biquad_state_t eq_state_r[BIQUAD_EQ_NUM_BANDS];
-        biquad_eq_process_frame(&tmp[0][0][0], eq_state_l, frame_count, appconfAUDIO_PIPELINE_CHANNELS);
-        biquad_eq_process_frame(&tmp[0][0][1], eq_state_r, frame_count, appconfAUDIO_PIPELINE_CHANNELS);
-    }
+    /* Both the DAC and the AEC reference use the equalized samples. */
+    static biquad_state_t eq_state[BIQUAD_EQ_CHANNELS][BIQUAD_EQ_NUM_BANDS];
+    biquad_eq_process_stereo(tmp, eq_state, frame_count);
 
     // send to DAC
     rtos_i2s_tx_1(i2s_ctx,
-                (int32_t*) tmp,
+                tmp,
                 frame_count,
                 portMAX_DELAY);
     
@@ -121,15 +121,18 @@ int speaker_pipeline_output(void *output_app_data,
         static int32_t src_data[2][SRC_FF3V_FIR_NUM_PHASES][SRC_FF3V_FIR_TAPS_PER_PHASE] __attribute__((aligned (8)));
         int32_t tmp_out[appconfAUDIO_PIPELINE_FRAME_ADVANCE][1][appconfAUDIO_PIPELINE_REF_CHANNELS];
         
-        for( int frame=0; frame < frame_count; frame +=3 ){
-            sum[0] = src_ds3_voice_add_sample(0, src_data[0][0], src_ff3v_fir_coefs[0], tmp[frame][0][0]);
-            sum[1] = src_ds3_voice_add_sample(0, src_data[1][0], src_ff3v_fir_coefs[0], tmp[frame][0][1]);
+        for (size_t frame = 0; frame < frame_count; frame += 3) {
+            const int32_t *phase0 = &tmp[frame * appconfI2S_FRAME_CHANNELS];
+            const int32_t *phase1 = phase0 + appconfI2S_FRAME_CHANNELS;
+            const int32_t *phase2 = phase1 + appconfI2S_FRAME_CHANNELS;
+            sum[0] = src_ds3_voice_add_sample(0, src_data[0][0], src_ff3v_fir_coefs[0], phase0[0]);
+            sum[1] = src_ds3_voice_add_sample(0, src_data[1][0], src_ff3v_fir_coefs[0], phase0[1]);
 
-            sum[0] = src_ds3_voice_add_sample(sum[0], src_data[0][1], src_ff3v_fir_coefs[1], tmp[frame+1][0][0]);
-            sum[1] = src_ds3_voice_add_sample(sum[1], src_data[1][1], src_ff3v_fir_coefs[1], tmp[frame+1][0][1]);
+            sum[0] = src_ds3_voice_add_sample(sum[0], src_data[0][1], src_ff3v_fir_coefs[1], phase1[0]);
+            sum[1] = src_ds3_voice_add_sample(sum[1], src_data[1][1], src_ff3v_fir_coefs[1], phase1[1]);
 
-            tmp_out[frame/3][0][0] = src_ds3_voice_add_final_sample(sum[0], src_data[0][2], src_ff3v_fir_coefs[2], tmp[frame+2][0][0]);
-            tmp_out[frame/3][0][1] = src_ds3_voice_add_final_sample(sum[1], src_data[1][2], src_ff3v_fir_coefs[2], tmp[frame+2][0][1]);
+            tmp_out[frame/3][0][0] = src_ds3_voice_add_final_sample(sum[0], src_data[0][2], src_ff3v_fir_coefs[2], phase2[0]);
+            tmp_out[frame/3][0][1] = src_ds3_voice_add_final_sample(sum[1], src_data[1][2], src_ff3v_fir_coefs[2], phase2[1]);
         }
         memcpy( frame_data, tmp_out, appconfAUDIO_PIPELINE_FRAME_ADVANCE * appconfAUDIO_PIPELINE_REF_CHANNELS * sizeof( int32_t ) );
     } else {
