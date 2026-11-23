@@ -75,26 +75,52 @@ CI-style build in the XMOS builder container:
   two-mic build does not expose this resource.
 - An existing Satellite1 ESPHome configuration using the standard IDs
   `satellite1_id` and `xflash` from
-  [`satellite1.base.yaml`][sat1-base]. The examples use the
-  [Satellite1-ESPHome revision checked here][sat1-rev], which requires
-  ESPHome 2026.10.2 or newer. There is no upstream
-  `config/common/xmos_array_debug.yaml` package at that revision.
+  [`satellite1.base.yaml`][sat1-base], and ESPHome 2026.10.2 or newer.
 
-Choose **one** example and add it to your device YAML (the file that loads the
-Satellite1 package). If that file already has `substitutions:`, `interval:` or
-`sensor:`, add the example's entries under the existing key rather than
-declaring the key twice. Keep `xmos_auto_flash_on_boot: "false"` so a reboot
-does not automatically replace your experimental image on a version mismatch.
-This does not cancel a flash already scheduled for the next boot or recovery
-from an interrupted flash. Upload the resulting ESPHome configuration to the
-ESP32; you do not need to reflash the XMOS.
+### Pin the Satellite1-ESPHome dependency for either example
+
+Replace the existing Satellite1 entry under `packages:` in your **device
+YAML** with the one below. If the entry is a shorthand `github://...` include,
+replace it rather than loading both. Keep your other packages and device
+settings (such as `esphome:`, `wifi:` and `logger:`).
+
+```yaml
+packages:
+  FutureProofHomes.Satellite1:
+    url: &sat1_url https://github.com/FutureProofHomes/Satellite1-ESPHome
+    ref: &sat1_ref 95c05f56677063d5312b087ba751c7c07313a2e0
+    files:
+      - config/satellite1.base.yaml
+      - config/common/dashboard_build.yaml
+      - path: config/common/components.external.yaml
+        vars:
+          ext_comp_repo_url: *sat1_url
+          ext_comp_repo_ref: *sat1_ref
+
+substitutions:
+  xmos_auto_flash_on_boot: "false"
+```
+
+This pins both the YAML package and the external C++ components to the
+[same tested revision][sat1-rev]. If you have separate `external_components:`
+overrides for `satellite1` or `memory_flasher`, remove them so the pinned
+package supplies both. Updating ESPHome itself, or switching branches in
+Satellite1-XMOS, does not update these components.
+
+Merge the substitution into your existing `substitutions:` block. It stops
+boot-time version mismatch checks from automatically replacing the experimental
+XMOS image, but does not cancel a flash already scheduled for the next boot
+or recovery from an interrupted flash.
+
+Choose **one** example below and merge it into the same device YAML. If
+`interval:` or `sensor:` already exists, append the list entries rather than
+declaring the key twice. Clean the device's build files and rebuild. Upload
+the resulting ESPHome configuration to the ESP32; you do not need to reflash
+the XMOS.
 
 ### A. Raw diagnostic logging
 
 ```yaml
-substitutions:
-  xmos_auto_flash_on_boot: "false"
-
 interval:
   - interval: 5s
     then:
@@ -127,9 +153,6 @@ microphone RMS of −30.10 dBFS.
 ### B. Home Assistant diagnostic sensors
 
 ```yaml
-substitutions:
-  xmos_auto_flash_on_boot: "false"
-
 sensor:
   - {platform: template, id: xmos_mic_e, name: "XMOS Mic E RMS", unit_of_measurement: "dBFS",
      accuracy_decimals: 2, entity_category: diagnostic, state_class: measurement, update_interval: never}
@@ -262,6 +285,12 @@ and 100,000 ticks = 1 ms. A frame is 15 ms.
 
 ### Troubleshooting and limitations
 
+- **Build errors mentioning `is_xmos_connected`, `in_progress`, or
+  `boot_flash_pending`:** the build is using older Satellite1-ESPHome
+  components. Apply the [package and component pin above](#pin-the-satellite1-esphome-dependency-for-either-example)
+  and check for conflicting `external_components:` overrides before rebuilding.
+  Don't remove the readiness checks: the older SPI reader also decodes replies
+  differently.
 - **No log lines:** check the logger level and verify that the XMOS is
   connected. The poll skips a disconnected XMOS and pending or active
   `xflash` work. The component also rejects device-control transfers while
@@ -283,9 +312,9 @@ and 100,000 ticks = 1 ms. A frame is 15 ms.
   loop, so keep the polling interval conservative. A successful read does
   request a reset of the mic peak holds; running both examples would
   duplicate SPI traffic and change the peak-hold interval.
-- **Physical verification:** both examples passed configuration validation
-  and C++ generation with ESPHome 2026.10.2 and the standard Satellite1
-  configuration. The decoding was checked against the firmware struct.
+- **Verification:** ESPHome 2026.10.2 generated C++ for both examples with
+  the pinned dependencies, and the ESP32-S3 toolchain compiled both generated
+  `main.cpp` files. The decoding was checked against the firmware struct.
   Confirm on a Satellite1 that logs return version 1,
   mode 2, that mic levels and beam selection respond to sound, and that
   playback and voice capture remain uninterrupted while polling.
