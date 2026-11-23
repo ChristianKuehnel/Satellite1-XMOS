@@ -79,6 +79,10 @@ CI-style build in the XMOS builder container:
 
 ### Pin the Satellite1-ESPHome dependency for either example
 
+If you need to keep Satellite1-ESPHome commit `d762ae9`, follow the
+[compatibility instructions](#keeping-satellite1-esphome-at-d762ae9)
+instead of applying this pin.
+
 Replace the existing Satellite1 entry under `packages:` in your **device
 YAML** with the one below. If the entry is a shorthand `github://...` include,
 replace it rather than loading both. Keep your other packages and device
@@ -221,6 +225,63 @@ counter of observed losses. ESPHome numeric sensors are floats, so they
 cannot represent every integer above 2²⁴ exactly; use the raw dump for exact
 large counter values.
 
+### Keeping Satellite1-ESPHome at `d762ae9`
+
+Keep both your Satellite1 package and its external components at
+[`d762ae9e6e7161379ef8489735710fed43f507b0`][sat1-legacy]. Do **not** apply
+the newer dependency pin above. This revision does not honor
+`xmos_auto_flash_on_boot`. Its standard dashboard build only flashes the
+embedded image on demand, so don't press **XMOS Flash Embedded FW**. If
+your config includes the product `config/satellite1.yaml` (which does have
+boot-time flashing actions), remove the embedded image to prevent those
+actions from replacing your experimental XMOS firmware:
+
+```yaml
+memory_flasher:
+  - id: !extend xflash
+    embed_flash_image: !remove
+```
+
+With that override, the embedded-image flash button no longer works.
+
+1. Copy [`xmos_array_diag_d762ae9.h`](examples/xmos_array_diag_d762ae9.h)
+   next to your device YAML and append it to `esphome.includes`:
+
+   ```yaml
+   esphome:
+     includes:
+       - xmos_array_diag_d762ae9.h
+   ```
+
+2. Choose example A or B above. For **A**, replace the readiness guard
+   and `transfer()` call with these lines (keep the existing warning,
+   logging, and closing braces):
+
+   ```cpp
+   if (!xmos_array_diag_d762ae9::ready(id(satellite1_id), id(xflash)))
+     return;
+   uint8_t data[130]{};
+   if (!xmos_array_diag_d762ae9::read(id(satellite1_id), id(xflash), data)) {
+   ```
+
+   For **B**, replace just the `ready` and `read_ok` declarations with:
+
+   ```cpp
+   const bool ready = xmos_array_diag_d762ae9::ready(id(satellite1_id), id(xflash));
+   const bool read_ok = ready && xmos_array_diag_d762ae9::read(id(satellite1_id), id(xflash), p);
+   ```
+
+3. Clean the device's build files and rebuild. Flash only the ESP32.
+
+The compatibility header skips polling unless the XMOS is connected and the
+flasher is idle. It uses the existing device-control SPI link and checks the
+reply marker and command status before copying all 130 diagnostics bytes.
+The older `transfer()` would instead copy the status into byte 0 and leave
+out the last data byte. The remaining logging and sensor decoding is
+unchanged. Both adapted examples' generated `main.cpp` files compiled with
+ESPHome 2026.10.2's ESP32-S3 toolchain against `d762ae9`; the SPI read has
+not been tested on hardware.
+
 ### Protocol and fields
 
 The public [`Satellite1::transfer()`][sat1-api] can be called from a lambda:
@@ -288,9 +349,9 @@ and 100,000 ticks = 1 ms. A frame is 15 ms.
 - **Build errors mentioning `is_xmos_connected`, `in_progress`, or
   `boot_flash_pending`:** the build is using older Satellite1-ESPHome
   components. Apply the [package and component pin above](#pin-the-satellite1-esphome-dependency-for-either-example)
-  and check for conflicting `external_components:` overrides before rebuilding.
-  Don't remove the readiness checks: the older SPI reader also decodes replies
-  differently.
+  or use the [compatibility header for `d762ae9`](#keeping-satellite1-esphome-at-d762ae9).
+  Don't just remove the readiness checks: the older SPI reader also decodes
+  replies differently.
 - **No log lines:** check the logger level and verify that the XMOS is
   connected. The poll skips a disconnected XMOS and pending or active
   `xflash` work. The component also rejects device-control transfers while
@@ -320,6 +381,7 @@ and 100,000 ticks = 1 ms. A frame is 15 ms.
   playback and voice capture remain uninterrupted while polling.
 
 [sat1-rev]: https://github.com/FutureProofHomes/Satellite1-ESPHome/tree/95c05f56677063d5312b087ba751c7c07313a2e0
+[sat1-legacy]: https://github.com/FutureProofHomes/Satellite1-ESPHome/tree/d762ae9e6e7161379ef8489735710fed43f507b0
 [sat1-base]: https://github.com/FutureProofHomes/Satellite1-ESPHome/blob/95c05f56677063d5312b087ba751c7c07313a2e0/config/satellite1.base.yaml
 [sat1-api]: https://github.com/FutureProofHomes/Satellite1-ESPHome/blob/95c05f56677063d5312b087ba751c7c07313a2e0/esphome/components/satellite1/satellite1.h#L99-L140
 [diag-c]: ../satellite-xmos-firmware/audio_pipelines/reference/fixed_delay_array/array_diag.c
