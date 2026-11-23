@@ -23,7 +23,7 @@ def test_git_info(mock_subproc):
             mock.stdout = "abc123\n"
         elif args == ["git", "status", "--porcelain"]:
             mock.stdout = ""  # No changed files
-        elif args == ["git", "describe", "--tags", "--abbrev=0"]:
+        elif args[:2] == ["git", "describe"]:
             mock.stdout = "v1.2.3\n"
         elif args == ["git", "diff"]:
             mock.stdout = "patch content"
@@ -55,7 +55,7 @@ def test_git_info_no_tags(mock_subproc):
             mock.stdout = "abc123\n"
         elif args == ["git", "status", "--porcelain"]:
             mock.stdout = " "
-        elif args == ["git", "describe", "--tags", "--abbrev=0"]:
+        elif args[:2] == ["git", "describe"]:
             raise subprocess.CalledProcessError(1, "git describe")  # Simulate no tags
         elif args == ["git", "diff"]:
             mock.stdout = "patch content"
@@ -69,6 +69,21 @@ def test_git_info_no_tags(mock_subproc):
     assert git_info.branch == "main"
     assert git_info.commit == "abc123"
     assert git_info.last_tag is None
+
+
+def test_git_info_ignores_dev_release_tags(tmp_path):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "--quiet")
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.com")
+    git("commit", "--allow-empty", "-m", "Release")
+    git("tag", "v1.2.3-beta.1")
+    git("commit", "--allow-empty", "-m", "Dev build")
+    git("tag", "dev-20261116-7b6f332")
+
+    assert GitInfo.from_ws(tmp_path).last_tag == "v1.2.3-beta.1"
 
 
 @patch("versioning.GitInfo.from_ws")

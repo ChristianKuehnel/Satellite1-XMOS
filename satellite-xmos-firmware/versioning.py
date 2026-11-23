@@ -164,7 +164,12 @@ class GitInfo:
                 ).stdout.strip() 
         
             try:
-                last_tag =subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], 
+                # CI also publishes dev-<date>-<sha> release tags, which
+                # cannot serve as the base of an embedded firmware version.
+                last_tag = subprocess.run(
+                        ['git', 'describe', '--tags', '--abbrev=0',
+                         '--match', 'v[0-9]*.[0-9]*.[0-9]*',
+                         '--match', '[0-9]*.[0-9]*.[0-9]*'],
                         cwd=repo_root, capture_output=True, text=True,  check=True
                     ).stdout.strip()        
             except:
