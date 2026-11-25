@@ -91,7 +91,9 @@ static array_select_t selector;
 #if appconfARRAY_FRONTEND_MODE == ARRAY_FRONTEND_BEAM
 static array_beamformer_t beamformer;
 static int32_t DWORD_ALIGNED beams[ARRAY_BEAM_COUNT][appconfAUDIO_PIPELINE_FRAME_ADVANCE];
+#if appconfARRAY_DEV_FIXED_BEAM < 0
 static int prev_frame_speech;
+#endif
 #endif
 
 /* Diagnostics state. Owned by the front-end stage except where noted. */
@@ -306,10 +308,11 @@ static void stage_frontend_and_ic(frame_data_t *frame_data)
     }
 #else /* ARRAY_FRONTEND_BEAM */
     {
-        float energy_db[ARRAY_BEAM_COUNT];
         int32_t DWORD_ALIGNED y[appconfAUDIO_PIPELINE_FRAME_ADVANCE];
         int32_t DWORD_ALIGNED x[appconfAUDIO_PIPELINE_FRAME_ADVANCE];
 
+#if appconfARRAY_DEV_FIXED_BEAM < 0
+        float energy_db[ARRAY_BEAM_COUNT];
         array_beamformer_process(&beamformer,
                                  (const int32_t (*)[ARRAY_FRAME_ADVANCE])frame_data->samples,
                                  beams, energy_db);
@@ -328,6 +331,14 @@ static void stage_frontend_and_ic(frame_data_t *frame_data)
             memcpy(y, beams[sel], sizeof(y));
             memcpy(x, beams[array_beam_opposite(sel)], sizeof(x));
         }
+#else
+        const unsigned sel = selector.selected;
+        array_beamformer_process(&beamformer,
+                                 (const int32_t (*)[ARRAY_FRAME_ADVANCE])frame_data->samples,
+                                 beams, NULL);
+        memcpy(y, beams[sel], sizeof(y));
+        memcpy(x, beams[array_beam_opposite(sel)], sizeof(x));
+#endif
 
 #if appconfARRAY_DEV_TAP
         if (frame_data->tap_mode == ARRAY_TAP_BEAMS) {
@@ -342,7 +353,7 @@ static void stage_frontend_and_ic(frame_data_t *frame_data)
 
     float_s32_t agc_vnr_threshold = f32_to_float_s32(VNR_AGC_THRESHOLD);
     frame_data->vnr_pred_flag = float_s32_gt(selected_vnr, agc_vnr_threshold);
-#if appconfARRAY_FRONTEND_MODE == ARRAY_FRONTEND_BEAM
+#if appconfARRAY_FRONTEND_MODE == ARRAY_FRONTEND_BEAM && appconfARRAY_DEV_FIXED_BEAM < 0
     prev_frame_speech = frame_data->vnr_pred_flag;
 #endif
 
@@ -380,19 +391,7 @@ static void stage_frontend_and_ic(frame_data_t *frame_data)
 static void stage_ns(frame_data_t *frame_data)
 {
     const uint32_t t_start = get_reference_time();
-#if appconfAUDIO_PIPELINE_SKIP_NS
-#else
-    int32_t DWORD_ALIGNED ns_output[appconfAUDIO_PIPELINE_FRAME_ADVANCE];
-    configASSERT(NS_FRAME_ADVANCE == appconfAUDIO_PIPELINE_FRAME_ADVANCE);
-    ns_process_frame(
-                &ns_stage_state.state,
-                ns_output,
-                frame_data->samples[0]);
-    memcpy(frame_data->samples[0], ns_output, appconfAUDIO_PIPELINE_FRAME_ADVANCE * sizeof(int32_t));
-#if appconfAUDIO_PIPELINE_STORE_NS_AUDIO
-    memcpy(frame_data->aec_reference_audio_samples[1], ns_output, appconfAUDIO_PIPELINE_FRAME_ADVANCE * sizeof(int32_t));   // Store NS audio in the second reference channel
-#endif
-#endif
+    array_process_ns_frame(&ns_stage_state.state, frame_data);
     const uint32_t ticks = get_reference_time() - t_start;
     if (ticks > ns_ticks_max) ns_ticks_max = ticks;
     if (ticks > AP_FRAME_TICKS) late_stage_misses++;
@@ -463,7 +462,13 @@ static void initialize_pipeline_stages(void)
                       ARRAY_SELECT_CONFIRM_FRAMES, ARRAY_SELECT_MIN_DWELL_FRAMES);
 #else
     configASSERT(array_beamformer_init(&beamformer) == 0);
-    array_select_init(&selector, ARRAY_BEAM_COUNT, 0,
+    /* Use the library bypass, not a wire around IC: target delay, overlap-add
+     * and VNR still run, but the estimated interference is not subtracted. */
+#if appconfARRAY_DEV_BYPASS_IC
+    ic_stage_state[0].state.config_params.bypass = 1;
+#endif
+    array_select_init(&selector, ARRAY_BEAM_COUNT,
+                      appconfARRAY_DEV_FIXED_BEAM < 0 ? 0 : appconfARRAY_DEV_FIXED_BEAM,
                       ARRAY_SELECT_SMOOTH_ALPHA, ARRAY_BEAM_SWITCH_MARGIN_DB,
                       ARRAY_SELECT_CONFIRM_FRAMES, ARRAY_SELECT_MIN_DWELL_FRAMES);
 #endif

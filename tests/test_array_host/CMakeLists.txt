@@ -157,6 +157,19 @@ if(FW_CHECK_AVAILABLE)
     add_fw_check(fw_check_t0_beam     0 2 0)
     add_fw_check(fw_check_t0_pair_tap 0 1 1)
     add_fw_check(fw_check_t0_beam_tap 0 2 1)
+    add_fw_check(fw_check_t0_beam_ab  0 2 0)
+    target_compile_definitions(fw_check_t0_beam_ab PRIVATE
+        appconfARRAY_DEV_FIXED_BEAM=3 appconfARRAY_DEV_BYPASS_IC=1 appconfAUDIO_PIPELINE_SKIP_NS=1)
+
+    foreach(SKIP_NS IN ITEMS 0 1)
+        set(NAME test_array_ns_routing_${SKIP_NS})
+        add_executable(${NAME} test_array_ns_routing.c)
+        target_include_directories(${NAME} PRIVATE ${FW_CHECK_INCLUDES})
+        target_compile_definitions(${NAME} PRIVATE ${FW_CHECK_DEFS}
+            THIS_XCORE_TILE=0 appconfARRAY_FRONTEND_MODE=2 appconfAUDIO_PIPELINE_SKIP_NS=${SKIP_NS})
+        target_compile_options(${NAME} PRIVATE ${FW_CHECK_FLAGS})
+        add_test(NAME ${NAME} COMMAND ${NAME})
+    endforeach()
 
     add_library(app_conf_check_2mic OBJECT test_app_conf_equivalence.c)
     target_include_directories(app_conf_check_2mic PRIVATE ${FW_CHECK_INCLUDES})

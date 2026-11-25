@@ -329,6 +329,23 @@ static void test_selector(void)
     CHECK(t.selected == 0, "confirmation not reset by an interruption");
     array_select_update(&t, a, 1);
     CHECK(t.selected == 1, "did not switch after an uninterrupted confirmation");
+
+    /* A burst that nearly qualifies must not carry over to the next one. */
+    array_select_init(&t, 2, 0, ARRAY_SELECT_SMOOTH_ALPHA, ARRAY_BEAM_SWITCH_MARGIN_DB,
+                      ARRAY_SELECT_CONFIRM_FRAMES, ARRAY_SELECT_MIN_DWELL_FRAMES);
+    a[1] = 4.0f;
+    for (unsigned i = 1; i < ARRAY_SELECT_CONFIRM_FRAMES; i++) {
+        array_select_update(&t, a, 1);
+    }
+    for (unsigned i = 0; i < 100; i++) array_select_update(&t, b, 0);
+    CHECK(t.selected == 0 && t.confirm_count == 0, "silence preserved pending confirmation");
+    CHECK(fabsf(t.score[1] - a[1]) < 1e-5f, "invalid frames altered smoothed scores");
+    CHECK(t.frames_since_switch == ARRAY_SELECT_MIN_DWELL_FRAMES + ARRAY_SELECT_CONFIRM_FRAMES - 1 + 100,
+          "invalid frames did not advance dwell time");
+    for (unsigned i = 1; i < ARRAY_SELECT_CONFIRM_FRAMES; i++) {
+        CHECK(!array_select_update(&t, a, 1), "switched too soon after silence");
+    }
+    CHECK(array_select_update(&t, a, 1) && t.selected == 1, "failed to confirm after silence");
 }
 
 static void test_crossfade_reference_stats(void)

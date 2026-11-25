@@ -15,6 +15,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include "FreeRTOS.h"
 #include "stream_buffer.h"
 #include "app_conf.h"
@@ -49,6 +50,15 @@
 #ifndef appconfARRAY_PAIR_FORCE
 #define appconfARRAY_PAIR_FORCE (-1)
 #endif
+
+#ifndef appconfARRAY_DEV_FIXED_BEAM
+#define appconfARRAY_DEV_FIXED_BEAM (-1)
+#endif
+#ifndef appconfARRAY_DEV_BYPASS_IC
+#define appconfARRAY_DEV_BYPASS_IC 0
+#endif
+_Static_assert(appconfARRAY_DEV_FIXED_BEAM >= -1 &&
+               appconfARRAY_DEV_FIXED_BEAM < ARRAY_BEAM_COUNT, "invalid fixed beam index");
 
 /* Pipeline config */
 #define AP_MAX_Y_CHANNELS (ARRAY_MIC_COUNT)
@@ -120,6 +130,21 @@ _Static_assert(offsetof(frame_data_t, mic_samples_passthrough) ==
                offsetof(frame_data_t, aec_reference_audio_samples) +
                sizeof(((frame_data_t *)0)->aec_reference_audio_samples),
                "frame layout must be contiguous for audio_pipeline_input()");
+
+static inline void array_process_ns_frame(ns_state_t *state, frame_data_t *frame)
+{
+#if appconfAUDIO_PIPELINE_SKIP_NS
+    (void)state;
+#else
+    int32_t DWORD_ALIGNED ns_output[ARRAY_FRAME_ADVANCE];
+    _Static_assert(NS_FRAME_ADVANCE == ARRAY_FRAME_ADVANCE, "NS frame size mismatch");
+    ns_process_frame(state, ns_output, frame->samples[0]);
+    memcpy(frame->samples[0], ns_output, sizeof(ns_output));
+#endif
+    /* I2S lane 1 always needs pre-AGC microphone audio. Never leave the
+     * right speaker reference in this slot, even when NS is bypassed. */
+    memcpy(frame->aec_reference_audio_samples[1], frame->samples[0], sizeof(frame->samples[0]));
+}
 
 typedef struct aec_ctx {
     aec_state_t DWORD_ALIGNED state;
