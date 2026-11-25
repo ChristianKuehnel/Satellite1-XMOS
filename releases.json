@@ -1,0 +1,84 @@
+{
+  "dev_latest": {
+    "tag": "dev-latest",
+    "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-latest",
+    "commit": "57d883101e8e85a0c52775d907c4de2f71a01195",
+    "version": "v0.0.0-dev",
+    "git_describe": "57d8831",
+    "date": "2026-11-25T09:29:05Z"
+  },
+  "releases": [
+    {
+      "tag": "dev-20261125-57d8831",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261125-57d8831",
+      "commit": "57d883101e8e85a0c52775d907c4de2f71a01195",
+      "version": "v0.0.0-dev",
+      "git_describe": "57d8831",
+      "date": "2026-11-25T09:29:05Z"
+    },
+    {
+      "tag": "dev-20261123-d341adf",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261123-d341adf",
+      "commit": "d341adfb526c0e5fdfa7c48b46c206f3067525d7",
+      "version": "v0.0.0-dev",
+      "git_describe": "d341adf",
+      "date": "2026-11-23T12:13:41Z"
+    },
+    {
+      "tag": "dev-20261123-20f827f",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261123-20f827f",
+      "commit": "20f827fb02535d38a3ad58a0651314c9af2cf800",
+      "version": "v0.0.0-dev",
+      "git_describe": "20f827f",
+      "date": "2026-11-23T11:52:52Z"
+    },
+    {
+      "tag": "dev-20261123-8ed8c27",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261123-8ed8c27",
+      "commit": "8ed8c27abd7fd154ae58639fd11a8f196b270475",
+      "version": "v0.0.0-dev",
+      "git_describe": "8ed8c27",
+      "date": "2026-11-23T09:47:23Z"
+    },
+    {
+      "tag": "dev-20261120-7dc7015",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261120-7dc7015",
+      "commit": "7dc7015b802f7890965227bd0c1de8cd72b47c6f",
+      "version": "v0.0.0-dev",
+      "git_describe": "7dc7015",
+      "date": "2026-11-20T18:54:46Z"
+    },
+    {
+      "tag": "dev-20261120-7484f39",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261120-7484f39",
+      "commit": "7484f3951283ebeb826f2c9b689d76b2b5cdfe41",
+      "version": "v0.0.0-dev",
+      "git_describe": "7484f39",
+      "date": "2026-11-20T09:59:37Z"
+    },
+    {
+      "tag": "dev-20261120-a412ebc",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261120-a412ebc",
+      "commit": "a412ebc995090bfaf9d78aeee1281487682b6195",
+      "version": "v0.0.0-dev",
+      "git_describe": "a412ebc",
+      "date": "2026-11-20T07:47:07Z"
+    },
+    {
+      "tag": "dev-20261116-7b6f332",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261116-7b6f332",
+      "commit": "7b6f33224ad16e37d5110397ee0e6358ecdb03b3",
+      "version": "v0.0.0-dev",
+      "git_describe": "7b6f332",
+      "date": "2026-11-16T13:28:18Z"
+    },
+    {
+      "tag": "dev-20261116-11e60e3",
+      "url": "https://github.com/ChristianKuehnel/Satellite1-XMOS/releases/tag/dev-20261116-11e60e3",
+      "commit": "11e60e3",
+      "version": "v0.0.0-dev",
+      "git_describe": "11e60e3",
+      "date": "2026-11-16"
+    }
+  ]
+}
