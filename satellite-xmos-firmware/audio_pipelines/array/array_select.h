@@ -40,8 +40,8 @@ void array_select_init(array_select_t *s,
                        unsigned min_dwell_frames);
 
 /* Feed one frame. raw_scores has num_candidates entries (higher is better).
- * When valid is 0 the scores are ignored and the selection is held (the dwell
- * counter still advances). Returns 1 if the selection changed on this frame. */
+ * An invalid frame clears pending confirmation, holds scores and selection,
+ * and still advances the dwell counter. Returns 1 on a selection change. */
 int array_select_update(array_select_t *s, const float *raw_scores, int valid);
 
 /* Force a selection (e.g. a compile-time or host-requested override). */

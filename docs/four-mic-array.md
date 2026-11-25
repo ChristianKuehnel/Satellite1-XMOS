@@ -62,6 +62,16 @@ make create_flash_img_satellite1_firmware_fixed_delay_4mic_bf
 Add `-DSAT1_ARRAY_DEV_TAP=ON` for a development build that can route raw, AEC
 or beam signals onto the output lanes. Never ship a dev-tap build.
 
+For a controlled IC comparison, build `satellite1_firmware_fixed_delay_4mic_bf`
+in two separate build directories. Pass `-DSAT1_ARRAY_DEV_FIXED_BEAM=0` to both
+configures (choose the same beam index `0`–`7` for both images). Pass
+`-DSAT1_ARRAY_DEV_BYPASS_IC=OFF` to one and `-DSAT1_ARRAY_DEV_BYPASS_IC=ON` to
+the other. The bypass disables interference subtraction while retaining the
+IC signal delay and VNR processing; NS and AGC stay in the chain. Leave dev
+taps off for wake-word or Assist testing. Both flags are for development only
+and apply only to the beamforming target. For normal operation use fixed beam
+`-1` (automatic steering) and bypass `OFF`, the defaults.
+
 CI-style build in the XMOS builder container:
 `tools/ci/build_firmware.sh tools/ci/firmwares_array_dev.txt`.
 

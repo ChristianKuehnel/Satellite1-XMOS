@@ -142,6 +142,13 @@ add_library(fph::ffva::ap::empty ALIAS empty_2mic_2ref)
 
 set(SAT1_ARRAY_DEV_TAP OFF CACHE BOOL
     "Compile the development audio tap into the four-mic pipelines (never for release builds)")
+set(SAT1_ARRAY_DEV_FIXED_BEAM "-1" CACHE STRING
+    "Beamforming A/B test only: -1 for automatic steering, or a fixed beam index (0-7)")
+option(SAT1_ARRAY_DEV_BYPASS_IC
+    "Beamforming A/B test only: bypass IC subtraction but keep IC delay and VNR" OFF)
+if(NOT SAT1_ARRAY_DEV_FIXED_BEAM MATCHES "^(-1|[0-7])$")
+    message(FATAL_ERROR "SAT1_ARRAY_DEV_FIXED_BEAM must be -1 or a beam index in [0, 7]")
+endif()
 
 set(FIXED_DELAY_ARRAY_DIR ${CMAKE_CURRENT_LIST_DIR}/fixed_delay_array)
 set(ARRAY_LIB_DIR ${CMAKE_CURRENT_LIST_DIR}/../array)
@@ -195,6 +202,13 @@ function(fph_add_fixed_delay_array_pipeline NAME ALIAS FRONTEND_MODE)
             appconfARRAY_DIAG_SERVICER_COUNT=1
             appconfARRAY_DEV_TAP=$<BOOL:${SAT1_ARRAY_DEV_TAP}>
     )
+    if(FRONTEND_MODE EQUAL 2)
+        target_compile_definitions(${NAME}
+            INTERFACE
+                appconfARRAY_DEV_FIXED_BEAM=${SAT1_ARRAY_DEV_FIXED_BEAM}
+                appconfARRAY_DEV_BYPASS_IC=$<BOOL:${SAT1_ARRAY_DEV_BYPASS_IC}>
+        )
+    endif()
     add_library(fph::ffva::ap::${ALIAS} ALIAS ${NAME})
 endfunction()
 

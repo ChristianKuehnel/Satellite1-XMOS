@@ -43,6 +43,8 @@ int array_select_update(array_select_t *s, const float *raw_scores, int valid)
         s->frames_since_switch++;
     }
     if (!valid) {
+        s->challenger = s->selected;
+        s->confirm_count = 0;
         return 0;
     }
 
